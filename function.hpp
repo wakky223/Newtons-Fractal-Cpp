@@ -1,4 +1,7 @@
 #pragma once
+#include <string>
+#include <vector>
+#include <iostream>
 #include "complex.hpp"
 
 #ifdef __DEBUG
@@ -23,7 +26,8 @@ enum {
     TAN = 11,
     SEC = 12,
     CSC = 13,
-    COT = 14
+    COT = 14,
+    LN = 15
 };
 
 class func
@@ -33,103 +37,9 @@ public:
 
     }
 
-    /// @brief init function object
-    /// @param funcString function string
-    void init(std::string funcString) {
-        function_string = funcString;
+    void init(std::string funcString);
 
-        //remove all spaces
-        for (int i = 0; i < function_string.length(); i++) {
-            if (function_string[i] == ' ') {
-                function_string.erase(i, 1);
-                i--;
-            }
-        }
-
-        try {
-            CheckBrackets(funcString);
-            tokenize(funcString);
-            pre_format();
-            parse_tokens(tokens);
-            while(simplify());
-            std::cout << "Interpreted as: " << get_tokens() << std::endl;
-        }
-        catch (int exc) {
-            std::cout << "Error parsing function. ";
-            switch (exc) {
-            case 0:
-                std::cout << "Cannot have \"()\"" << std::endl;
-                break;
-            case 1:
-                std::cout << "Cannot have \"( operator\"" << std::endl;
-                break;
-            case 2:
-                std::cout << "Cannot have two adjacent operators" << std::endl;
-                break;
-            case 4:
-                std::cout << "This is most likely an unknown charecter" << std::endl;
-                break;
-            case 5:
-                std::cout << "Can't do powers" << std::endl;
-                break;
-            default:
-                std::cout << "Assert error on line number " << exc << "in file " << __FILE__ <<std::endl;
-            }
-        }
-    }
-
-
-    /// @brief init function object, repeatedly ask the user for a function until a valid function is provided
-    void init() {
-        while (true) {
-            tokens.clear();
-            std::cout << "Enter a function: ";
-            std::cin >> function_string;
-            if (std::cin.fail()){
-                std::cin.clear();
-                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-            }
-
-            //remove all spaces
-            for (int i = 0; i < function_string.length(); i++) {
-                if (function_string[i] == ' ') {
-                    function_string.erase(i, 1);
-                    i--;
-                }
-            }
-
-            try {
-                CheckBrackets(function_string);
-                tokenize(function_string);
-                pre_format();
-                parse_tokens(tokens);
-                while(simplify());
-                std::cout << "Interpreted as: " << get_tokens() << std::endl;
-                break;
-            }
-            catch (int exc) {
-                switch (exc) {
-                case 0:
-                    std::cout << "Cannot have \"()\"" << std::endl;
-                    break;
-                case 1:
-                    std::cout << "Cannot have \"( operator\"" << std::endl;
-                    break;
-                case 2:
-                    std::cout << "Cannot have two adjacent operators" << std::endl;
-                    break;
-                case 4:
-                    std::cout << "Error when trying to parse function, this is most likely an unknown character" << std::endl;
-                    break;
-                case 5:
-                    std::cout << "Can't do powers yet lol" << std::endl;
-                    break;
-                default:
-                    std::cout << "Assert error on line number " << exc << std::endl;
-                }
-            }
-        }
-    }
+    void init();
 
     std::string function_string = "";
     std::vector<std::string> tokens;
@@ -180,6 +90,9 @@ public:
                 break;
             case COT:
                 output += "cot ";
+                break;
+            case LN:
+                output += "ln ";
                 break;
             default:
                 break;
@@ -242,6 +155,7 @@ private:
         case '^':
             return POWER;
         case 'x':
+        case 'z':
             return VARIABLE;
         }
         if (input == "sin") {
@@ -261,6 +175,9 @@ private:
         }
         else if (input == "cot") {
             return COT;
+        }
+        else if(input == "ln"){
+            return LN;
         }
         throw(4);
     }
@@ -297,7 +214,7 @@ private:
                 tokens.push_back(")");
                 input.erase(0, 1);
             }
-            else if (input[0] == 'x') {
+            else if (input[0] == 'x' || input[0] == 'z') {
                 //the variable
                 tokens.push_back("x");
                 input.erase(0, 1);
@@ -346,7 +263,7 @@ private:
             else {
                 //if none of the other options are true the string must start with a function.
                 for (int i = 1; i <= input.length(); i++) {
-                    if ((input[i] < 'a' || input[i] > 'z') || input[i] == 'x') {
+                    if ((input[i] < 'a' || input[i] > 'y') || input[i] == 'x') {
                         tokens.push_back(input.substr(0, i));
                         input.erase(0, i);
                         break;
@@ -645,6 +562,9 @@ private:
             case COT:
                 return cot(num1);
                 break;
+            case LN:
+                return log(num1);
+                break;
             }
         }
         int startPoint2 = startPoint - 2;
@@ -686,5 +606,3 @@ private:
         }
     }
 };
-
-#undef assert

@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <future>
+#include <set>
 #include "complex.hpp"
 #include "function.hpp"
 #include "bmp.hpp"
@@ -10,9 +11,9 @@ constexpr auto MAX_STEPS = 1000;
 
 constexpr auto STEPS_PER_EVAL = 2;
 
-constexpr auto accuracy = 0.000001;
+constexpr auto accuracy = 0.0001;
 
-#if _CONTAINER_DEBUG_LEVEL > 0
+#ifdef _debug
 constexpr auto MULTITHREADED = false;
 #else
 constexpr auto MULTITHREADED = true;
@@ -81,8 +82,8 @@ unsigned long long simpleHash(complex input){
 complex iterate(func& function, complex input) {
     complex a = function.evaluate_function(input);
     //use nextafter to calculate a suitible value of dx based on precicion of floats
-    auto dx = complex(nextafterf(input.re,INFINITY),nextafterf(input.im,INFINITY)) - input;
-    dx = dx * 4;
+    auto dx = complex(nextafterf(input.re,INFINITY) - input.re);
+    dx = dx * 10;
     return input - ((dx * a) / (function.evaluate_function(dx + input) - a));
 }
 
@@ -155,8 +156,27 @@ void evalSection(complex offset, double scale, int imgheight, int imgwidth, int 
     }
 }
 
-int main(int argc, char* argv[]) {
+/// @brief outputs the path taken for a specific starting value of newtons method
+/// @param function referance to function to be evaluated
+void outputpathTaken(func& function){
+    complex value, prev;
+    getInput("real componant:",value.re);
+    getInput("imaginary componant:",value.im);
+    short steps = 0;
+    while (steps < MAX_STEPS) {
+        prev = value;
+        value = iterate(function, value);
+        std::cout << string(value) << "\n";
+        steps++;
+        auto difference = abs(value - prev);
+        if (difference.re < accuracy && difference.im < accuracy) {
+            break;
+        }
+    }
 
+}
+
+int main(int argc, char* argv[]) {
     if (argc == 2 && std::string(argv[1]) == "-help") {
         std::cout << "Newtons Fractal:" << std::endl;
         std::cout << "Generates a fractal based on a given function. More information can be found at https://wikipedia.org/wiki/Newton_fractal" << std::endl;
@@ -172,6 +192,7 @@ int main(int argc, char* argv[]) {
         std::cout << "-pauseonfinish or -p      pause the program when redering is done     example: -pauseonfinish n" << std::endl;
         std::cout << "-default or -d            use default values for                      example: -default" << std::endl;
         std::cout << "-nopercent                don't display percent complete              example: -nopercent" << std::endl;
+        std::cout << "-showallroots             show all found roots after render is done   example: -nopercent" << std::endl;
         return 0;
     }
 
@@ -314,6 +335,8 @@ int main(int argc, char* argv[]) {
 
     bool displayPercent = true;
 
+    bool showAllRoots = false;
+
     func func;
 
     //Argument handling
@@ -368,8 +391,17 @@ int main(int argc, char* argv[]) {
                     pauseOnFinish = false;
                     i++;
                 }
-            }else if (std::string(argv[i]) == "-nopercent") {
+            }
+            else if (std::string(argv[i]) == "-nopercent") {
                 displayPercent = false;
+            }
+            else if (std::string(argv[i]) == "-showallroots") {
+                showAllRoots = true;
+            }
+            else if (std::string(argv[i]) == "-evalpoint") {
+                func.init();
+                outputpathTaken(func);
+                return 1;
             }
         }
     }
@@ -462,17 +494,20 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    //TODO: re-add this feature
-    /*
-    //std::vector<complex> roots;
-    //Outputs every root if there are less than 10, otherwise output number of roots
-    if (roots.size() > 10) std::cout << "found " << roots.size() << " roots" << std::endl;
-    else {
-        for (int k = 0; k < roots.size(); k++)
-        {
-            std::cout << "fount root :" << string(roots[k]) << std::endl;
+    std::set<complex> roots;
+    for(std::vector<complex> rows : values){
+        for(complex value : rows){
+            roots.insert(value);
         }
-    }*/
+    }
+    //Outputs every root if there are less than 10, otherwise output number of roots
+    if (roots.size() > 10 && !showAllRoots) std::cout << "found " << roots.size() << " roots" << std::endl;
+    else {
+        for (complex root : roots)
+        {
+            std::cout << "fount root :" << string(root) << std::endl;
+        }
+    }
 
     
     //End timer and output program time
@@ -507,7 +542,6 @@ int main(int argc, char* argv[]) {
 
 /*
 TODO:
-publish to gihub
 add gui
 add support for the user to add color pallettes
 figure out how to make a png instead of bmp
