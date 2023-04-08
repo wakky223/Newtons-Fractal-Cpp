@@ -20,48 +20,35 @@ constexpr auto MULTITHREADED = true;
 #endif
 
 //Asks the user for input until a valid response is given
-void getInput(std::string question, int& value) {
+bool getInput(std::string question) {
+    std::string choice;
+    while (true) {
+        std::cout << question;
+        std::cin >> choice;
+        if (choice[0] == 'y' || choice[0] == 'Y') {
+            return true;
+        }
+        else if (choice[0] == 'n' || choice[0] == 'N') {
+            return false;
+        }
+    }
+}
+
+//Asks the user for input until a valid response is given
+template<typename T>
+T getInput(std::string question) {
     bool gotExpr = false;
+    T output;
     while (!gotExpr) {
         std::cout << question;
-        std::cin >> value;
+        std::cin >> output;
         if (!std::cin.fail()) gotExpr = true;
         std::cin.clear(); 
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     }
+    return output;
 }
 
-//Asks the user for input until a valid response is given
-void getInput(std::string question, double& value) {
-    bool gotExpr = false;
-    while (!gotExpr) {
-        std::cout << question;
-        std::cin >> value;
-        if (!std::cin.fail()) gotExpr = true;
-        else {
-            std::cin.clear();
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        }
-    }
-}
-
-//Asks the user for input until a valid response is given
-void getInput(std::string question, bool& value) {
-    bool gotExpr = false;
-    std::string choice;
-    while (!gotExpr) {
-        std::cout << question;
-        std::cin >> choice;
-        if (choice[0] == 'y' || choice[0] == 'Y') {
-            value = true;
-            gotExpr = true;
-        }
-        else if (choice[0] == 'n' || choice[0] == 'N') {
-            value = false;
-            gotExpr = true;
-        }
-    }
-}
 
 /// @brief weird hash funtion that takes in a complex number
 /// @param input complex number
@@ -160,8 +147,8 @@ void evalSection(complex offset, double scale, int imgheight, int imgwidth, int 
 /// @param function referance to function to be evaluated
 void outputpathTaken(func& function){
     complex value, prev;
-    getInput("real componant:",value.re);
-    getInput("imaginary componant:",value.im);
+    value.re = getInput<double>("real componant:");
+    value.im = getInput<double>("imaginary componant:");
     short steps = 0;
     while (steps < MAX_STEPS) {
         prev = value;
@@ -193,6 +180,7 @@ int main(int argc, char* argv[]) {
         std::cout << "-default or -d            use default values for                      example: -default" << std::endl;
         std::cout << "-nopercent                don't display percent complete              example: -nopercent" << std::endl;
         std::cout << "-showallroots             show all found roots after render is done   example: -nopercent" << std::endl;
+        //std::cout << "-samplecout or -s         number of samples per pixel                 example: -aa 8" << std::endl;
         return 0;
     }
 
@@ -309,32 +297,18 @@ int main(int argc, char* argv[]) {
     };
 
     //Initialize default values
-    int imgwidth = 1920;
-    bool gotimgwidth = false;
-
-    int imgheight = 1080;
-    bool gotimgheight = false;
-
-    double reOffset = 0.00001;
-    bool gotreOffset = false;
-
-    double imOffset = 0.00001;
-    bool gotimOffset = false;
-
-    double zoom = 400;
-    bool gotzoom = false;
+    int imgwidth = -1;
+    int imgheight = -1;
+    double reOffset = NAN;
+    double imOffset = NAN;
+    double zoom = 0;
 
     std::string functionString = "";
-    bool gotfunctionstring = false;
 
     bool openOnFinish = true;
-
     bool pauseOnFinish = true;
-
     bool useDefaultValues = false;
-
     bool displayPercent = true;
-
     bool showAllRoots = false;
 
     func func;
@@ -344,40 +318,33 @@ int main(int argc, char* argv[]) {
         //Run through each argument and check if it defined, set variables as necessary
         for (int i = 0; i < argc; i++) {
             if (std::string(argv[i]) == "-default" || std::string(argv[i]) == "-d") {
-                useDefaultValues = true;
-                gotimgwidth = true;
-                gotimgheight = true;
-                gotreOffset = true;
-                gotimOffset = true;
-                gotzoom = true;
+                imgwidth = 1920;
+                imgheight = 1080;
+                reOffset = 0.000001;
+                imOffset = 0.000001;
+                zoom = 400;
             }else if (std::string(argv[i]) == "-width" || std::string(argv[i]) == "-w") {
                 imgwidth = std::stoi(argv[i + 1]);
-                gotimgwidth = true;
                 i++;
             }
             else if (std::string(argv[i]) == "-height" || std::string(argv[i]) == "-h") {
                 imgheight = std::stoi(argv[i + 1]);
-                gotimgheight = true;
                 i++;
             }
             else if (std::string(argv[i]) == "-reoffset" || std::string(argv[i]) == "-re") {
                 reOffset = std::stod(argv[i + 1]);
-                gotreOffset = true;
                 i++;
             }
             else if (std::string(argv[i]) == "-imoffset" || std::string(argv[i]) == "-im") {
                 imOffset = std::stod(argv[i + 1]);
-                gotimOffset = true;
                 i++;
             }
             else if (std::string(argv[i]) == "-zoom" || std::string(argv[i]) == "-z") {
                 zoom = std::stod(argv[i + 1]);
-                gotzoom = true;
                 i++;
             }
             else if (std::string(argv[i]) == "-function" || std::string(argv[i]) == "-f") {
                 functionString = argv[i + 1];
-                gotfunctionstring = true;
                 i++;
             }
             else if (std::string(argv[i]) == "-openonfinish" || std::string(argv[i]) == "-o") {
@@ -407,34 +374,33 @@ int main(int argc, char* argv[]) {
     }
 
     //if none of the values have been defined, prompt to use defaults
-    if (!gotimgwidth && !gotimgheight && !gotreOffset && !gotimOffset && !gotzoom && !useDefaultValues) {
-        getInput("Use default values?(y/n)", useDefaultValues);
-        if (useDefaultValues) {
-            gotimgwidth = true;
-            gotimgheight = true;
-            gotreOffset = true;
-            gotimOffset = true;
-            gotzoom = true;
+    if (imgwidth == -1 && imgheight == -1 && isnan(reOffset) && isnan(imOffset) && zoom == 0) {
+        if(getInput("Use default values?(y/n)")){
+            imgwidth = 1920;
+            imgheight = 1080;
+            reOffset = 0.000001;
+            imOffset = 0.000001;
+            zoom = 400;
         }
     }
 
     //prompt user for each value if it has not been set
-    if (!gotimgwidth) {
-        getInput("Pixel width of the image: ", imgwidth);
+    if (imgwidth == -1) {
+        imgwidth  = getInput<int>("Pixel width of the image: ");
     }
-    if (!gotimgheight) {
-        getInput("Pixel height of the image: ", imgheight);
+    if (imgheight == -1) {
+        imgheight = getInput<int>("Pixel height of the image: ");
     }
-    if (!gotreOffset) {
-        getInput("Offset on real axis: ", reOffset);
+    if (isnan(reOffset)) {
+        reOffset = getInput<double>("Offset on real axis: ");
     }
-    if (!gotimOffset) {
-        getInput("Offset on imaginary axis: ", imOffset);
+    if (isnan(imOffset)) {
+        imOffset = getInput<double>("Offset on imaginary axis: ");
     }
-    if (!gotzoom) {
-        getInput("Zoom: ", zoom);
+    if (zoom == 0) {
+        zoom = getInput<double>("Zoom: ");
     }
-    if (gotfunctionstring) {
+    if (functionString != "") {
         func.init(functionString);
     }else{
         func.init();
