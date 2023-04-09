@@ -2,7 +2,10 @@
 #include <vector>
 #include <string>
 #include <future>
+#include <thread>
+#include <chrono>
 #include <set>
+#include <cstdlib>
 #include "complex.hpp"
 #include "function.hpp"
 #include "bmp.hpp"
@@ -11,7 +14,9 @@ constexpr auto MAX_STEPS = 1000;
 
 constexpr auto STEPS_PER_EVAL = 2;
 
-constexpr auto accuracy = 0.0001;
+constexpr auto accuracy = 0.001;
+
+constexpr auto progressBarLength = 30;
 
 #ifdef _debug
 constexpr auto MULTITHREADED = false;
@@ -118,7 +123,7 @@ complex newtons_method(func& function, complex input, short& shading) {
 /// @param shading referance to 2d vector of shading values
 /// @param progressCounter referance to progress counter
 /// @param displaypercent print "x% complete" to the console
-void evalSection(complex offset, double scale, int imgheight, int imgwidth, int start, int end, func function, std::vector<std::vector<complex>>& values, std::vector<std::vector<short>>& shading, unsigned int& progressCounter, bool displaypercent) {
+void evalSection(complex offset, double scale, int imgheight, int imgwidth, int start, int end, func function, std::vector<std::vector<complex>>& values, std::vector<std::vector<short>>& shading, unsigned int& progressCounter) {
     try {
         for (int i = start; i < end; i++) {
             for (int j = 0; j < imgheight; j++)
@@ -127,9 +132,7 @@ void evalSection(complex offset, double scale, int imgheight, int imgwidth, int 
             }
             progressCounter++;
             //Display % complete
-            if (displaypercent && progressCounter % 100 == 0) {
-                std::cout << std::to_string(progressCounter * 100 / imgwidth) + "% complete\n";
-            }
+            
 
         }
     }
@@ -180,7 +183,7 @@ int main(int argc, char* argv[]) {
         std::cout << "-default or -d            use default values for                      example: -default" << std::endl;
         std::cout << "-nopercent                don't display percent complete              example: -nopercent" << std::endl;
         std::cout << "-showallroots             show all found roots after render is done   example: -nopercent" << std::endl;
-        //std::cout << "-samplecout or -s         number of samples per pixel                 example: -aa 8" << std::endl;
+        std::cout << "-samplecout or -s         number of samples per pixel                 example: -aa 8" << std::endl;
         return 0;
     }
 
@@ -299,6 +302,7 @@ int main(int argc, char* argv[]) {
     //Initialize default values
     int imgwidth = -1;
     int imgheight = -1;
+    int samples = 0;
     double reOffset = NAN;
     double imOffset = NAN;
     double zoom = 0;
@@ -320,6 +324,7 @@ int main(int argc, char* argv[]) {
             if (std::string(argv[i]) == "-default" || std::string(argv[i]) == "-d") {
                 imgwidth = 1920;
                 imgheight = 1080;
+                samples = 2;
                 reOffset = 0.000001;
                 imOffset = 0.000001;
                 zoom = 400;
@@ -347,6 +352,10 @@ int main(int argc, char* argv[]) {
                 functionString = argv[i + 1];
                 i++;
             }
+            else if (std::string(argv[i]) == "-samplecout" || std::string(argv[i]) == "-s") {
+                samples = std::stoi(argv[i + 1]);
+                i++;
+            }
             else if (std::string(argv[i]) == "-openonfinish" || std::string(argv[i]) == "-o") {
                 if (argv[i+1][0] == 'n' || argv[i + 1][0] == 'N' || std::string(argv[i + 1]) == "false") {
                     openOnFinish = false;
@@ -365,11 +374,6 @@ int main(int argc, char* argv[]) {
             else if (std::string(argv[i]) == "-showallroots") {
                 showAllRoots = true;
             }
-            else if (std::string(argv[i]) == "-evalpoint") {
-                func.init();
-                outputpathTaken(func);
-                return 1;
-            }
         }
     }
 
@@ -378,6 +382,7 @@ int main(int argc, char* argv[]) {
         if(getInput("Use default values?(y/n)")){
             imgwidth = 1920;
             imgheight = 1080;
+            samples = 2;
             reOffset = 0.000001;
             imOffset = 0.000001;
             zoom = 400;
@@ -400,6 +405,9 @@ int main(int argc, char* argv[]) {
     if (zoom == 0) {
         zoom = getInput<double>("Zoom: ");
     }
+    if (samples == 0) {
+        samples = getInput<int>("Samples: ");
+    }
     if (functionString != "") {
         func.init(functionString);
     }else{
@@ -413,33 +421,51 @@ int main(int argc, char* argv[]) {
     //Initialize scale, offset, root table, and shading table
     double scale = 1/zoom;
     complex offset = complex(reOffset, -imOffset);
-    std::vector<std::vector<complex>> values(imgwidth, std::vector<complex>(imgheight, complex(NAN)));
+    std::vector<std::vector<std::vector<complex>>> valuesTable(samples, std::vector<std::vector<complex>>(imgwidth, std::vector<complex>(imgheight, complex(NAN))));
     std::vector<std::vector<short>> shading(imgwidth, std::vector<short>(imgheight, 0));
     unsigned int progressCounter = 0;
 
-    //If MULTITHREAD is enabled and there is more than 1 processor
-    if (MULTITHREADED && std::thread::hardware_concurrency() > 1) {
-        auto processor_count = std::thread::hardware_concurrency();
-        std::vector<std::future<void>> thread(processor_count);
+    auto processor_count = std::thread::hardware_concurrency();
+    std::vector<std::future<void>> thread(processor_count);
+    std::vector<std::future_status> status(processor_count);
+    for( int sample = 0; sample < samples; sample++){
         for (int i = 0; i < processor_count; i++)
         {
             int startcol = round(float(i) * (float(imgwidth) / float(processor_count)));
-            int endcol = round((float(i) + 1.0) * (float(imgwidth) / float(processor_count)));
-            thread[i] = std::async(std::launch::async, evalSection, offset, scale, imgheight, imgwidth, startcol, endcol, func, std::ref(values), std::ref(shading), std::ref(progressCounter),displayPercent);
+            int endcol = round((float(i) + 1.0) * (float(imgwidth) / float(processor_count)));    
+            offset.re += (double(rand())/RAND_MAX - 0.5) * scale;
+            offset.im += (double(rand())/RAND_MAX - 0.5) * scale;
+            thread[i] = std::async(std::launch::async, evalSection, offset, scale, imgheight, imgwidth, startcol, endcol, func, std::ref(valuesTable[sample]), std::ref(shading), std::ref(progressCounter));
         }
-
-        for (int i = 0; i < processor_count; i++) {
+        while(true){
+            int total = 0;
+            for(int i = 0; i < processor_count; i++)
+                total += int(thread[i].wait_for(std::chrono::milliseconds(100)));
+            if(total == 0)
+                break;
+            // [██████████----------]
+            if (displayPercent) {
+                std::string progressBar = "[" ;
+                int i;
+                for (i = 0; i < ((progressCounter * progressBarLength / imgwidth) / samples); i++)
+                {
+                    progressBar += "█";
+                }
+                for (; i < progressBarLength; i++)
+                {
+                    progressBar += "-";
+                }
+                progressBar += "]\r";
+                std::cout << progressBar;
+            }
+        }
+        for (int i = 0; i < processor_count; i++)
             thread[i].get();
-        }
-
-    }
-    //Singlethreded mode
-    else {
-        evalSection(offset, scale, imgheight, imgwidth, 0, imgwidth, func, std::ref(values), std::ref(shading), std::ref(progressCounter),displayPercent);
+        
     }
     
-    std::cout << "Generating image..." << std::endl;
-    imgdata imgdata(imgwidth, imgheight);
+    std::cout << "\nGenerating image..." << std::endl;
+    std::vector<imgdata> imgdataTable(samples, imgdata(imgwidth, imgheight));
 
 
     //Loop through every pixel
@@ -447,23 +473,37 @@ int main(int argc, char* argv[]) {
     {
         for (int j = 0; j < imgheight; j++)
         {
-            //If NAN is found, set the pixel color to be black
-            if (isnan(values[i][j])) {
-                imgdata.data[i][j] = pixel(0);
-                continue;
+            for(int k = 0; k < samples; k++){
+                //If NAN is found, set the pixel color to be black
+                if (isnan(valuesTable[k][i][j])) {
+                    imgdataTable[k].data[i][j] = pixel(0);
+                    continue;
+                }
+                
+                //Picks a color from the color array based on the roots hash and adds shading value
+                valuesTable[k][i][j] = complex(round(valuesTable[k][i][j].re/(accuracy*10))*(accuracy*10),round(valuesTable[k][i][j].im/(accuracy*10))*(accuracy*10));
+                auto hash = simpleHash(valuesTable[k][i][j]);
+                imgdataTable[k].data[i][j] = color[hash % (sizeof(color) / sizeof(*color))] + pixel(shading[i][j] * 2 / samples);
             }
-            
-            //Picks a color from the color array based on the roots hash and adds shading value
-            values[i][j] = complex(round(values[i][j].re/(accuracy*10))*(accuracy*10),round(values[i][j].im/(accuracy*10))*(accuracy*10));
-            auto hash = simpleHash(values[i][j]);
-            imgdata.data[i][j] = color[hash % (sizeof(color) / sizeof(*color))] + pixel(shading[i][j] * 2);
+            //average the samples
+            int r = 0;
+            int g = 0;
+            int b = 0;
+            for( int sample = 0; sample < samples; sample++){
+                r += imgdataTable[sample].data[i][j].r;
+                g += imgdataTable[sample].data[i][j].g;
+                b += imgdataTable[sample].data[i][j].b;
+            }
+            imgdataTable[0].data[i][j].r = r / samples;
+            imgdataTable[0].data[i][j].g = g / samples;
+            imgdataTable[0].data[i][j].b = b / samples;
         }
     }
-
     std::set<complex> roots;
-    for(std::vector<complex> rows : values){
+    for(std::vector<complex> rows : valuesTable[0]){
         for(complex value : rows){
-            roots.insert(value);
+            if(!isnan(value))
+                roots.insert(value);
         }
     }
     //Outputs every root if there are less than 10, otherwise output number of roots
@@ -491,7 +531,7 @@ int main(int argc, char* argv[]) {
 
     //Write image data to file
     bmp bmp(func.function_string + ".bmp");
-    if(bmp.writeFile(imgdata)) std::cout << "Saved file as: " << func.function_string + ".bmp" << std::endl;
+    if(bmp.writeFile(imgdataTable[0])) std::cout << "Saved file as: " << func.function_string + ".bmp" << std::endl;
     else std::cout << "Error saving file." << std::endl;
 
     #ifdef _WIN32
