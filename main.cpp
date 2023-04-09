@@ -18,6 +18,8 @@ constexpr auto accuracy = 0.001;
 
 constexpr auto progressBarLength = 30;
 
+#define NEGATIVE_ZERO_DOUBLE 0x8000000000000000
+
 #ifdef _debug
 constexpr auto MULTITHREADED = false;
 #else
@@ -55,10 +57,21 @@ T getInput(std::string question) {
 }
 
 
+/// @brief negative zero is hard to remove in Ofast
+/// @param v pointer to double to use
+void removeNegativeZero(double* v){
+    unsigned long long* g = (unsigned long long*)(v);
+    if(*g == 0x8000000000000000)
+        *g = 0;
+    
+}
+
 /// @brief weird hash funtion that takes in a complex number
 /// @param input complex number
 /// @return integer
 unsigned long long simpleHash(complex input){
+    removeNegativeZero(&input.re);
+    removeNegativeZero(&input.im);
     unsigned long long output = 0;
     //make a float pointer with the same adress as output
     float* floatptr = (float*)(&output);
@@ -122,7 +135,6 @@ complex newtons_method(func& function, complex input, short& shading) {
 /// @param values referance to 2d vector of values to output
 /// @param shading referance to 2d vector of shading values
 /// @param progressCounter referance to progress counter
-/// @param displaypercent print "x% complete" to the console
 void evalSection(complex offset, double scale, int imgheight, int imgwidth, int start, int end, func function, std::vector<std::vector<complex>>& values, std::vector<std::vector<short>>& shading, unsigned int& progressCounter) {
     try {
         for (int i = start; i < end; i++) {
@@ -131,9 +143,6 @@ void evalSection(complex offset, double scale, int imgheight, int imgwidth, int 
                 values[i][j] = newtons_method(function, complex(i - imgwidth / 2, j - imgheight / 2) * scale + offset, shading[i][j]);
             }
             progressCounter++;
-            //Display % complete
-            
-
         }
     }
     catch (int exc) {
@@ -167,6 +176,11 @@ void outputpathTaken(func& function){
 }
 
 int main(int argc, char* argv[]) {
+    auto a = isnanIEEE754(-0.00000099999);
+
+
+
+
     if (argc == 2 && std::string(argv[1]) == "-help") {
         std::cout << "Newtons Fractal:" << std::endl;
         std::cout << "Generates a fractal based on a given function. More information can be found at https://wikipedia.org/wiki/Newton_fractal" << std::endl;
@@ -378,7 +392,7 @@ int main(int argc, char* argv[]) {
     }
 
     //if none of the values have been defined, prompt to use defaults
-    if (imgwidth == -1 && imgheight == -1 && isnan(reOffset) && isnan(imOffset) && zoom == 0) {
+    if (imgwidth == -1 && imgheight == -1 && isnanIEEE754(reOffset) && isnanIEEE754(imOffset) && zoom == 0) {
         if(getInput("Use default values?(y/n)")){
             imgwidth = 1920;
             imgheight = 1080;
@@ -396,10 +410,10 @@ int main(int argc, char* argv[]) {
     if (imgheight == -1) {
         imgheight = getInput<int>("Pixel height of the image: ");
     }
-    if (isnan(reOffset)) {
+    if (isnanIEEE754(reOffset)) {
         reOffset = getInput<double>("Offset on real axis: ");
     }
-    if (isnan(imOffset)) {
+    if (isnanIEEE754(imOffset)) {
         imOffset = getInput<double>("Offset on imaginary axis: ");
     }
     if (zoom == 0) {
@@ -432,10 +446,10 @@ int main(int argc, char* argv[]) {
         for (int i = 0; i < processor_count; i++)
         {
             int startcol = round(float(i) * (float(imgwidth) / float(processor_count)));
-            int endcol = round((float(i) + 1.0) * (float(imgwidth) / float(processor_count)));    
-            offset.re += (double(rand())/RAND_MAX - 0.5) * scale;
-            offset.im += (double(rand())/RAND_MAX - 0.5) * scale;
-            thread[i] = std::async(std::launch::async, evalSection, offset, scale, imgheight, imgwidth, startcol, endcol, func, std::ref(valuesTable[sample]), std::ref(shading), std::ref(progressCounter));
+            int endcol = round((float(i) + 1.0) * (float(imgwidth) / float(processor_count)));
+            auto randOffset = complex((double(rand()) / RAND_MAX) - 0.5, (double(rand()) / RAND_MAX) - 0.5) * scale;
+            if(randOffset.re > scale ||randOffset.im > scale) throw 1231245; 
+            thread[i] = std::async(std::launch::async, evalSection, offset + randOffset, scale, imgheight, imgwidth, startcol, endcol, func, std::ref(valuesTable[sample]), std::ref(shading), std::ref(progressCounter));
         }
         while(true){
             int total = 0;
@@ -449,7 +463,7 @@ int main(int argc, char* argv[]) {
                 int i;
                 for (i = 0; i < ((progressCounter * progressBarLength / imgwidth) / samples); i++)
                 {
-                    progressBar += "█";
+                    progressBar += "X";
                 }
                 for (; i < progressBarLength; i++)
                 {
@@ -475,7 +489,7 @@ int main(int argc, char* argv[]) {
         {
             for(int k = 0; k < samples; k++){
                 //If NAN is found, set the pixel color to be black
-                if (isnan(valuesTable[k][i][j])) {
+                if (isnanIEEE754(valuesTable[k][i][j])) {
                     imgdataTable[k].data[i][j] = pixel(0);
                     continue;
                 }
@@ -502,7 +516,7 @@ int main(int argc, char* argv[]) {
     std::set<complex> roots;
     for(std::vector<complex> rows : valuesTable[0]){
         for(complex value : rows){
-            if(!isnan(value))
+            if(!isnanIEEE754(value))
                 roots.insert(value);
         }
     }
@@ -551,4 +565,5 @@ TODO:
 add gui
 add support for the user to add color pallettes
 figure out how to make a png instead of bmp
+& '.\Newtons Fractal.exe' -d -re 1 -im 0 -z 800 -f xxx-1 -w 2 -h 2 -s 1 should be 1 color in -Ofast
 */

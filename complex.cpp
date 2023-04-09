@@ -1,4 +1,5 @@
 #include "complex.hpp"
+#include "isnanIEEE754.h"
 
 complex::complex(double _re, double _im) {
     re = _re;
@@ -25,8 +26,8 @@ bool complex::operator == (complex a) {
     }
 }
 
-bool isnan(complex a) {
-    return (std::isnan(a.re) || std::isnan(a.im));
+bool isnanIEEE754(complex a) {
+    return (isnanIEEE754(a.re) || isnanIEEE754(a.im));
 }
 
 std::string string(complex a){

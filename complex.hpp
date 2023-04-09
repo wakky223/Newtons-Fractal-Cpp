@@ -12,7 +12,7 @@ struct complex {
     bool operator == (complex a);
 };
 
-bool isnan(complex a);
+bool isnanIEEE754(complex a);
 
 std::string string(complex a);
 
