@@ -26,6 +26,24 @@ constexpr auto MULTITHREADED = false;
 constexpr auto MULTITHREADED = true;
 #endif
 
+struct renderOptions{
+    int imgwidth = -1;
+    int imgheight = -1;
+    int samples = 0;
+    double reOffset = NAN;
+    double imOffset = NAN;
+    double zoom = 0;
+
+    std::string title = "";
+    std::string functionString = "";
+
+    bool openOnFinish = true;
+    bool pauseOnFinish = true;
+    bool useDefaultValues = false;
+    bool displayPercent = true;
+    bool showAllRoots = false;
+};
+
 //Asks the user for input until a valid response is given
 bool getInput(std::string question) {
     std::string choice;
@@ -176,11 +194,6 @@ void outputpathTaken(func& function){
 }
 
 int main(int argc, char* argv[]) {
-    auto a = isnanIEEE754(-0.00000099999);
-
-
-
-
     if (argc == 2 && std::string(argv[1]) == "-help") {
         std::cout << "Newtons Fractal:" << std::endl;
         std::cout << "Generates a fractal based on a given function. More information can be found at https://wikipedia.org/wiki/Newton_fractal" << std::endl;
@@ -191,13 +204,14 @@ int main(int argc, char* argv[]) {
         std::cout << "-reoffset or -re          real number offset of the render            example: -reoffset 0.01" << std::endl;
         std::cout << "-imoffset or -im          imaginary offset of the render              example: -imoffset -0.04" << std::endl;
         std::cout << "-zoom or -z               zoom for the render                         example: -zoom 250" << std::endl;
-        std::cout << "-function or -f           function to use(don't use spaces)           example: -function sin(x)" << std::endl;
+        std::cout << "-function or -f           function to use(don't use spaces)           example: -function \"sin(x)\"" << std::endl;
         std::cout << "-openonfinish or -o       open the function when redering is done     example: -openonfinish y" << std::endl;
         std::cout << "-pauseonfinish or -p      pause the program when redering is done     example: -pauseonfinish n" << std::endl;
         std::cout << "-default or -d            use default values for                      example: -default" << std::endl;
         std::cout << "-nopercent                don't display percent complete              example: -nopercent" << std::endl;
         std::cout << "-showallroots             show all found roots after render is done   example: -nopercent" << std::endl;
-        std::cout << "-samplecout or -s         number of samples per pixel                 example: -aa 8" << std::endl;
+        std::cout << "-samplecout or -s         number of samples per pixel                 example: -samplecout 8" << std::endl;
+        std::cout << "-title or -t              change the name of the output bmp file      exampleL -title \"img1.bmp\"" << std::endl;
         return 0;
     }
 
@@ -314,20 +328,7 @@ int main(int argc, char* argv[]) {
     };
 
     //Initialize default values
-    int imgwidth = -1;
-    int imgheight = -1;
-    int samples = 0;
-    double reOffset = NAN;
-    double imOffset = NAN;
-    double zoom = 0;
-
-    std::string functionString = "";
-
-    bool openOnFinish = true;
-    bool pauseOnFinish = true;
-    bool useDefaultValues = false;
-    bool displayPercent = true;
-    bool showAllRoots = false;
+    renderOptions options;
 
     func func;
 
@@ -336,94 +337,98 @@ int main(int argc, char* argv[]) {
         //Run through each argument and check if it defined, set variables as necessary
         for (int i = 0; i < argc; i++) {
             if (std::string(argv[i]) == "-default" || std::string(argv[i]) == "-d") {
-                imgwidth = 1920;
-                imgheight = 1080;
-                samples = 2;
-                reOffset = 0.000001;
-                imOffset = 0.000001;
-                zoom = 400;
+                options.imgwidth = 1920;
+                options.imgheight = 1080;
+                options.samples = 2;
+                options.reOffset = 0.000001;
+                options.imOffset = 0.000001;
+                options.zoom = 400;
             }else if (std::string(argv[i]) == "-width" || std::string(argv[i]) == "-w") {
-                imgwidth = std::stoi(argv[i + 1]);
+                options.imgwidth = std::stoi(argv[i + 1]);
                 i++;
             }
             else if (std::string(argv[i]) == "-height" || std::string(argv[i]) == "-h") {
-                imgheight = std::stoi(argv[i + 1]);
+                options.imgheight = std::stoi(argv[i + 1]);
                 i++;
             }
             else if (std::string(argv[i]) == "-reoffset" || std::string(argv[i]) == "-re") {
-                reOffset = std::stod(argv[i + 1]);
+                options.reOffset = std::stod(argv[i + 1]);
                 i++;
             }
             else if (std::string(argv[i]) == "-imoffset" || std::string(argv[i]) == "-im") {
-                imOffset = std::stod(argv[i + 1]);
+                options.imOffset = std::stod(argv[i + 1]);
                 i++;
             }
             else if (std::string(argv[i]) == "-zoom" || std::string(argv[i]) == "-z") {
-                zoom = std::stod(argv[i + 1]);
+                options.zoom = std::stod(argv[i + 1]);
                 i++;
             }
             else if (std::string(argv[i]) == "-function" || std::string(argv[i]) == "-f") {
-                functionString = argv[i + 1];
+                options.functionString = argv[i + 1];
                 i++;
             }
             else if (std::string(argv[i]) == "-samplecout" || std::string(argv[i]) == "-s") {
-                samples = std::stoi(argv[i + 1]);
+                options.samples = std::stoi(argv[i + 1]);
                 i++;
             }
             else if (std::string(argv[i]) == "-openonfinish" || std::string(argv[i]) == "-o") {
                 if (argv[i+1][0] == 'n' || argv[i + 1][0] == 'N' || std::string(argv[i + 1]) == "false") {
-                    openOnFinish = false;
+                    options.openOnFinish = false;
                     i++;
                 }
             }
+            else if (std::string(argv[i]) == "-title" || std::string(argv[i]) == "-t") {
+                options.title = argv[i + 1];
+                i++;
+            }
             else if (std::string(argv[i]) == "-pauseonfinish" || std::string(argv[i]) == "-p") {
                 if (argv[i + 1][0] == 'n' || argv[i + 1][0] == 'N' || std::string(argv[i + 1]) == "false") {
-                    pauseOnFinish = false;
+                    options.pauseOnFinish = false;
                     i++;
                 }
             }
             else if (std::string(argv[i]) == "-nopercent") {
-                displayPercent = false;
+                options.displayPercent = false;
             }
             else if (std::string(argv[i]) == "-showallroots") {
-                showAllRoots = true;
+                options.showAllRoots = true;
             }
         }
     }
 
     //if none of the values have been defined, prompt to use defaults
-    if (imgwidth == -1 && imgheight == -1 && isnanIEEE754(reOffset) && isnanIEEE754(imOffset) && zoom == 0) {
+    if (options.imgwidth == -1 && options.imgheight == -1 && isnanIEEE754(options.reOffset) && isnanIEEE754(options.imOffset) && options.zoom == 0) {
         if(getInput("Use default values?(y/n)")){
-            imgwidth = 1920;
-            imgheight = 1080;
-            samples = 2;
-            reOffset = 0.000001;
-            imOffset = 0.000001;
-            zoom = 400;
+            options.imgwidth = 1920;
+            options.imgheight = 1080;
+            options.samples = 2;
+            options.reOffset = 0.000001;
+            options.imOffset = 0.000001;
+            options.zoom = 400;
         }
     }
 
     //prompt user for each value if it has not been set
-    if (imgwidth == -1) {
-        imgwidth  = getInput<int>("Pixel width of the image: ");
+    if (options.imgwidth == -1) {
+        options.imgwidth  = getInput<int>("Pixel width of the image: ");
     }
-    if (imgheight == -1) {
-        imgheight = getInput<int>("Pixel height of the image: ");
+    if (options.imgheight == -1) {
+        options.imgheight = getInput<int>("Pixel height of the image: ");
     }
-    if (isnanIEEE754(reOffset)) {
-        reOffset = getInput<double>("Offset on real axis: ");
+    if (isnanIEEE754(options.reOffset)) {
+        options.reOffset = getInput<double>("Offset on real axis: ");
     }
-    if (isnanIEEE754(imOffset)) {
-        imOffset = getInput<double>("Offset on imaginary axis: ");
+    if (isnanIEEE754(options.imOffset)) {
+        options.imOffset = getInput<double>("Offset on imaginary axis: ");
     }
-    if (zoom == 0) {
-        zoom = getInput<double>("Zoom: ");
+    if (options.zoom == 0) {
+        options.zoom = getInput<double>("Zoom: ");
     }
-    if (samples == 0) {
-        samples = getInput<int>("Samples: ");
+    if (options.samples == 0) {
+        options.samples = getInput<int>("Samples: ");
     }
-    if (functionString != "") {
-        func.init(functionString);
+    if (options.functionString != "") {
+        func.init(options.functionString);
     }else{
         func.init();
     }
@@ -433,23 +438,22 @@ int main(int argc, char* argv[]) {
     start = clock();
 
     //Initialize scale, offset, root table, and shading table
-    double scale = 1/zoom;
-    complex offset = complex(reOffset, -imOffset);
-    std::vector<std::vector<std::vector<complex>>> valuesTable(samples, std::vector<std::vector<complex>>(imgwidth, std::vector<complex>(imgheight, complex(NAN))));
-    std::vector<std::vector<short>> shading(imgwidth, std::vector<short>(imgheight, 0));
+    double scale = 1/options.zoom;
+    complex offset = complex(options.reOffset, -options.imOffset);
+    std::vector<std::vector<std::vector<complex>>> valuesTable(options.samples, std::vector<std::vector<complex>>(options.imgwidth, std::vector<complex>(options.imgheight, complex(NAN))));
+    std::vector<std::vector<short>> shading(options.imgwidth, std::vector<short>(options.imgheight, 0));
     unsigned int progressCounter = 0;
 
     auto processor_count = std::thread::hardware_concurrency();
     std::vector<std::future<void>> thread(processor_count);
     std::vector<std::future_status> status(processor_count);
-    for( int sample = 0; sample < samples; sample++){
+    for( int sample = 0; sample < options.samples; sample++){
         for (int i = 0; i < processor_count; i++)
         {
-            int startcol = round(float(i) * (float(imgwidth) / float(processor_count)));
-            int endcol = round((float(i) + 1.0) * (float(imgwidth) / float(processor_count)));
+            int startcol = round(float(i) * (float(options.imgwidth) / float(processor_count)));
+            int endcol = round((float(i) + 1.0) * (float(options.imgwidth) / float(processor_count)));
             auto randOffset = complex((double(rand()) / RAND_MAX) - 0.5, (double(rand()) / RAND_MAX) - 0.5) * scale;
-            if(randOffset.re > scale ||randOffset.im > scale) throw 1231245; 
-            thread[i] = std::async(std::launch::async, evalSection, offset + randOffset, scale, imgheight, imgwidth, startcol, endcol, func, std::ref(valuesTable[sample]), std::ref(shading), std::ref(progressCounter));
+            thread[i] = std::async(std::launch::async, evalSection, offset + randOffset, scale, options.imgheight, options.imgwidth, startcol, endcol, func, std::ref(valuesTable[sample]), std::ref(shading), std::ref(progressCounter));
         }
         while(true){
             int total = 0;
@@ -457,11 +461,11 @@ int main(int argc, char* argv[]) {
                 total += int(thread[i].wait_for(std::chrono::milliseconds(100)));
             if(total == 0)
                 break;
-            // [██████████----------]
-            if (displayPercent) {
-                std::string progressBar = "[" ;
+            // [XXXXXXXXXX----------]
+            if (options.displayPercent) {
+                std::string progressBar = "\r[" ;
                 int i;
-                for (i = 0; i < ((progressCounter * progressBarLength / imgwidth) / samples); i++)
+                for (i = 0; i < round(((float(progressCounter * progressBarLength) / options.imgwidth) / options.samples)); i++)
                 {
                     progressBar += "X";
                 }
@@ -469,8 +473,8 @@ int main(int argc, char* argv[]) {
                 {
                     progressBar += "-";
                 }
-                progressBar += "]\r";
-                std::cout << progressBar;
+                progressBar += "] ";
+                std::cout << progressBar << progressCounter << "/" << options.imgwidth * options.samples;
             }
         }
         for (int i = 0; i < processor_count; i++)
@@ -479,15 +483,15 @@ int main(int argc, char* argv[]) {
     }
     
     std::cout << "\nGenerating image..." << std::endl;
-    std::vector<imgdata> imgdataTable(samples, imgdata(imgwidth, imgheight));
+    std::vector<imgdata> imgdataTable(options.samples, imgdata(options.imgwidth, options.imgheight));
 
 
     //Loop through every pixel
-    for (int i = 0; i < imgwidth; i++)
+    for (int i = 0; i < options.imgwidth; i++)
     {
-        for (int j = 0; j < imgheight; j++)
+        for (int j = 0; j < options.imgheight; j++)
         {
-            for(int k = 0; k < samples; k++){
+            for(int k = 0; k < options.samples; k++){
                 //If NAN is found, set the pixel color to be black
                 if (isnanIEEE754(valuesTable[k][i][j])) {
                     imgdataTable[k].data[i][j] = pixel(0);
@@ -497,20 +501,20 @@ int main(int argc, char* argv[]) {
                 //Picks a color from the color array based on the roots hash and adds shading value
                 valuesTable[k][i][j] = complex(round(valuesTable[k][i][j].re/(accuracy*10))*(accuracy*10),round(valuesTable[k][i][j].im/(accuracy*10))*(accuracy*10));
                 auto hash = simpleHash(valuesTable[k][i][j]);
-                imgdataTable[k].data[i][j] = color[hash % (sizeof(color) / sizeof(*color))] + pixel(shading[i][j] * 2 / samples);
+                imgdataTable[k].data[i][j] = color[hash % (sizeof(color) / sizeof(*color))] + pixel(shading[i][j] * 2 / options.samples);
             }
             //average the samples
             int r = 0;
             int g = 0;
             int b = 0;
-            for( int sample = 0; sample < samples; sample++){
+            for( int sample = 0; sample < options.samples; sample++){
                 r += imgdataTable[sample].data[i][j].r;
                 g += imgdataTable[sample].data[i][j].g;
                 b += imgdataTable[sample].data[i][j].b;
             }
-            imgdataTable[0].data[i][j].r = r / samples;
-            imgdataTable[0].data[i][j].g = g / samples;
-            imgdataTable[0].data[i][j].b = b / samples;
+            imgdataTable[0].data[i][j].r = r / options.samples;
+            imgdataTable[0].data[i][j].g = g / options.samples;
+            imgdataTable[0].data[i][j].b = b / options.samples;
         }
     }
     std::set<complex> roots;
@@ -521,7 +525,7 @@ int main(int argc, char* argv[]) {
         }
     }
     //Outputs every root if there are less than 10, otherwise output number of roots
-    if (roots.size() > 10 && !showAllRoots) std::cout << "found " << roots.size() << " roots" << std::endl;
+    if (roots.size() > 10 && !options.showAllRoots) std::cout << "found " << roots.size() << " roots" << std::endl;
     else {
         for (complex root : roots)
         {
@@ -544,16 +548,18 @@ int main(int argc, char* argv[]) {
     }
 
     //Write image data to file
-    bmp bmp(func.function_string + ".bmp");
+    if(options.title == "")
+        options.title = func.function_string;
+    bmp bmp(options.title + ".bmp");
     if(bmp.writeFile(imgdataTable[0])) std::cout << "Saved file as: " << func.function_string + ".bmp" << std::endl;
     else std::cout << "Error saving file." << std::endl;
 
     #ifdef _WIN32
     //"Press any key to continue . . ."
-    if(pauseOnFinish) system("pause");
+    if(options.pauseOnFinish) system("pause");
 
     //Open the file
-    if (openOnFinish) system(("\"\"./images/" + bmp.filename + "\"\"").c_str());
+    if (options.openOnFinish) system(("\"\"./images/" + bmp.filename + "\"\"").c_str());
     #endif
     
     return 0;
