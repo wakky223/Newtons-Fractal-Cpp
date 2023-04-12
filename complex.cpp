@@ -63,6 +63,11 @@ complex operator + (const complex& a,const double& b) {
     return complex(a.re + b, a.im);
 }
 
+complex operator += (const complex &a, const complex &b)
+{
+    return a + b;
+}
+
 complex operator - (const complex& a,const complex& b) {
     return complex(a.re - b.re, a.im - b.im);
 }

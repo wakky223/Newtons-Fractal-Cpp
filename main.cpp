@@ -26,6 +26,12 @@ constexpr auto MULTITHREADED = false;
 constexpr auto MULTITHREADED = true;
 #endif
 
+typedef enum showRoots{
+    DEFAULT,
+    ALL,
+    NONE
+} showRoots;
+
 struct renderOptions{
     int imgwidth = -1;
     int imgheight = -1;
@@ -37,11 +43,13 @@ struct renderOptions{
     std::string title = "";
     std::string functionString = "";
 
+    showRoots showRoots = DEFAULT;
+
     bool openOnFinish = true;
     bool pauseOnFinish = true;
     bool useDefaultValues = false;
     bool displayPercent = true;
-    bool showAllRoots = false;
+    
 };
 
 //Asks the user for input until a valid response is given
@@ -209,7 +217,7 @@ int main(int argc, char* argv[]) {
         std::cout << "-pauseonfinish or -p      pause the program when redering is done     example: -pauseonfinish n" << std::endl;
         std::cout << "-default or -d            use default values for                      example: -default" << std::endl;
         std::cout << "-nopercent                don't display percent complete              example: -nopercent" << std::endl;
-        std::cout << "-showallroots             show all found roots after render is done   example: -nopercent" << std::endl;
+        std::cout << "-showroots                show all/none or default amount of roots    example: -showroots all/none" << std::endl;
         std::cout << "-samplecout or -s         number of samples per pixel                 example: -samplecout 8" << std::endl;
         std::cout << "-title or -t              change the name of the output bmp file      exampleL -title \"img1.bmp\"" << std::endl;
         return 0;
@@ -390,8 +398,14 @@ int main(int argc, char* argv[]) {
             else if (std::string(argv[i]) == "-nopercent") {
                 options.displayPercent = false;
             }
-            else if (std::string(argv[i]) == "-showallroots") {
-                options.showAllRoots = true;
+            else if (std::string(argv[i]) == "-showroots") {
+                if (argv[i + 1][0] == 'a' || argv[i + 1][0] == 'A') {
+                    options.showRoots = ALL;
+                    i++;
+                }else if (argv[i + 1][0] == 'n' || argv[i + 1][0] == 'N') {
+                    options.showRoots = NONE;
+                    i++;
+                }
             }
         }
     }
@@ -481,8 +495,10 @@ int main(int argc, char* argv[]) {
             thread[i].get();
         
     }
+    if(options.displayPercent)
+        std::cout << std::endl;
     
-    std::cout << "\nGenerating image..." << std::endl;
+    std::cout << "Generating image..." << std::endl;
     std::vector<imgdata> imgdataTable(options.samples, imgdata(options.imgwidth, options.imgheight));
 
 
@@ -517,22 +533,27 @@ int main(int argc, char* argv[]) {
             imgdataTable[0].data[i][j].b = b / options.samples;
         }
     }
-    std::set<complex> roots;
-    for(std::vector<complex> rows : valuesTable[0]){
-        for(complex value : rows){
-            if(!isnanIEEE754(value))
-                roots.insert(value);
+    if(options.showRoots != NONE){
+        std::set<complex> roots;
+        for(std::vector<complex> rows : valuesTable[0]){
+            for(complex value : rows){
+                if(!isnanIEEE754(value))
+                    roots.insert(value);
+            }
         }
-    }
-    //Outputs every root if there are less than 10, otherwise output number of roots
-    if (roots.size() > 10 && !options.showAllRoots) std::cout << "found " << roots.size() << " roots" << std::endl;
-    else {
-        for (complex root : roots)
-        {
-            std::cout << "fount root :" << string(root) << std::endl;
+        if(options.showRoots == ALL)
+            for (complex root : roots)
+                std::cout << "fount root :" << string(root) << std::endl;
+        else{ //showRoots == DEFAULT
+            //Outputs every root if there are less than 10, otherwise output number of roots
+            if (roots.size() > 10) 
+                std::cout << "found " << roots.size() << " roots" << std::endl;
+            else
+                for (complex root : roots)
+                    std::cout << "fount root :" << string(root) << std::endl;
         }
+        
     }
-
     
     //End timer and output program time
     end = clock();
@@ -551,15 +572,19 @@ int main(int argc, char* argv[]) {
     if(options.title == "")
         options.title = func.function_string;
     bmp bmp(options.title + ".bmp");
-    if(bmp.writeFile(imgdataTable[0])) std::cout << "Saved file as: " << func.function_string + ".bmp" << std::endl;
-    else std::cout << "Error saving file." << std::endl;
+    if(bmp.writeFile(imgdataTable[0])) 
+        std::cout << "Saved file as: " << bmp.filename << std::endl;
+    else 
+        std::cout << "Error saving file." << std::endl;
 
     #ifdef _WIN32
     //"Press any key to continue . . ."
-    if(options.pauseOnFinish) system("pause");
+    if(options.pauseOnFinish) 
+        system("pause");
 
     //Open the file
-    if (options.openOnFinish) system(("\"\"./images/" + bmp.filename + "\"\"").c_str());
+    if (options.openOnFinish)  
+        system(("\"\"./images/" + bmp.filename + "\"\"").c_str());
     #endif
     
     return 0;
@@ -571,5 +596,4 @@ TODO:
 add gui
 add support for the user to add color pallettes
 figure out how to make a png instead of bmp
-& '.\Newtons Fractal.exe' -d -re 1 -im 0 -z 800 -f xxx-1 -w 2 -h 2 -s 1 should be 1 color in -Ofast
 */

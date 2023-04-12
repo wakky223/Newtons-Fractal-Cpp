@@ -26,6 +26,8 @@ complex operator + (const complex& a,const complex& b);
 
 complex operator + (const complex& a,const double& b);
 
+complex operator += (const complex& a,const complex& b);
+
 complex operator - (const complex& a,const complex& b);
 
 complex operator - (const complex& a,const double& b);
