@@ -12,13 +12,9 @@
 
 constexpr auto MAX_STEPS = 1000;
 
-constexpr auto STEPS_PER_EVAL = 2;
-
 constexpr auto accuracy = 0.001;
 
 constexpr auto progressBarLength = 30;
-
-#define NEGATIVE_ZERO_DOUBLE 0x8000000000000000
 
 #ifdef _debug
 constexpr auto MULTITHREADED = false;
@@ -36,9 +32,10 @@ struct renderOptions{
     int imgwidth = -1;
     int imgheight = -1;
     int samples = 0;
-    double reOffset = NAN;
-    double imOffset = NAN;
+    complex offset = complex(NAN,NAN);
     double zoom = 0;
+
+    unsigned char processor_count = std::thread::hardware_concurrency();
 
     std::string title = "";
     std::string functionString = "";
@@ -123,31 +120,24 @@ complex iterate(func& function, complex input) {
 /// @param input starting point for newtons method
 /// @param shading reference to value where number of iterations taken to find root will be stored
 /// @return root that is found
-complex newtons_method(func& function, complex input, short& shading) {
-    complex value[STEPS_PER_EVAL];
+complex newtons_method(func& function, complex input, short& steps) {
+    complex value;
+    value = input;
 
-    short steps = 0;
-    value[0] = input;
     while (steps < MAX_STEPS) {
-        for (int j = 1; j < STEPS_PER_EVAL; j++)
-        {
-            value[j] = iterate(function, value[j - 1]);
-            steps++;
-        }
-        auto difference = abs(value[0] - value[STEPS_PER_EVAL - 1]);
+            value = iterate(function, input);
+            input = iterate(function, value);
+            steps += 2;
+        auto difference = abs(value - input);
         if (difference.re < accuracy && difference.im < accuracy) {
             break;
         }
-        else {
-            value[0] = value[STEPS_PER_EVAL - 1];
-        }
     }
     if (steps >= MAX_STEPS - 1) {
+        steps = 0;
         return NAN;
     }
-    //std::cout << steps;
-    shading = steps;
-    return value[STEPS_PER_EVAL - 1];
+    return input;
 }
 
 /// @brief Evaluates a section of the image
@@ -161,12 +151,12 @@ complex newtons_method(func& function, complex input, short& shading) {
 /// @param values referance to 2d vector of values to output
 /// @param shading referance to 2d vector of shading values
 /// @param progressCounter referance to progress counter
-void evalSection(complex offset, double scale, int imgheight, int imgwidth, int start, int end, func function, std::vector<std::vector<complex>>& values, std::vector<std::vector<short>>& shading, unsigned int& progressCounter) {
+void evalSection(const renderOptions options, char thread, func function, std::vector<std::vector<complex>>& values, std::vector<std::vector<short>>& shading, unsigned int& progressCounter) {
     try {
-        for (int i = start; i < end; i++) {
-            for (int j = 0; j < imgheight; j++)
+        for (int i = 0 + thread; i < options.imgwidth; i += options.processor_count) {
+            for (int j = 0; j < options.imgheight; j++)
             {
-                values[i][j] = newtons_method(function, complex(i - imgwidth / 2, j - imgheight / 2) * scale + offset, shading[i][j]);
+                values[i][j] = newtons_method(function, complex(i - options.imgwidth / 2, j - options.imgheight / 2) * (1 / options.zoom) + options.offset, shading[i][j]);
             }
             progressCounter++;
         }
@@ -348,8 +338,8 @@ int main(int argc, char* argv[]) {
                 options.imgwidth = 1920;
                 options.imgheight = 1080;
                 options.samples = 2;
-                options.reOffset = 0.000001;
-                options.imOffset = 0.000001;
+                options.offset.re = 0.000001;
+                options.offset.im = 0.000001;
                 options.zoom = 400;
             }else if (std::string(argv[i]) == "-width" || std::string(argv[i]) == "-w") {
                 options.imgwidth = std::stoi(argv[i + 1]);
@@ -360,11 +350,11 @@ int main(int argc, char* argv[]) {
                 i++;
             }
             else if (std::string(argv[i]) == "-reoffset" || std::string(argv[i]) == "-re") {
-                options.reOffset = std::stod(argv[i + 1]);
+                options.offset.re = std::stod(argv[i + 1]);
                 i++;
             }
             else if (std::string(argv[i]) == "-imoffset" || std::string(argv[i]) == "-im") {
-                options.imOffset = std::stod(argv[i + 1]);
+                options.offset.im = std::stod(argv[i + 1]);
                 i++;
             }
             else if (std::string(argv[i]) == "-zoom" || std::string(argv[i]) == "-z") {
@@ -411,13 +401,13 @@ int main(int argc, char* argv[]) {
     }
 
     //if none of the values have been defined, prompt to use defaults
-    if (options.imgwidth == -1 && options.imgheight == -1 && isnanIEEE754(options.reOffset) && isnanIEEE754(options.imOffset) && options.zoom == 0) {
+    if (options.imgwidth == -1 && options.imgheight == -1 && isnanIEEE754(options.offset.re) && isnanIEEE754(options.offset.im) && options.zoom == 0) {
         if(getInput("Use default values?(y/n)")){
             options.imgwidth = 1920;
             options.imgheight = 1080;
             options.samples = 2;
-            options.reOffset = 0.000001;
-            options.imOffset = 0.000001;
+            options.offset.re = 0.000001;
+            options.offset.im = 0.000001;
             options.zoom = 400;
         }
     }
@@ -429,11 +419,11 @@ int main(int argc, char* argv[]) {
     if (options.imgheight == -1) {
         options.imgheight = getInput<int>("Pixel height of the image: ");
     }
-    if (isnanIEEE754(options.reOffset)) {
-        options.reOffset = getInput<double>("Offset on real axis: ");
+    if (isnanIEEE754(options.offset.re)) {
+        options.offset.re = getInput<double>("Offset on real axis: ");
     }
-    if (isnanIEEE754(options.imOffset)) {
-        options.imOffset = getInput<double>("Offset on imaginary axis: ");
+    if (isnanIEEE754(options.offset.im)) {
+        options.offset.im = getInput<double>("Offset on imaginary axis: ");
     }
     if (options.zoom == 0) {
         options.zoom = getInput<double>("Zoom: ");
@@ -453,25 +443,26 @@ int main(int argc, char* argv[]) {
 
     //Initialize scale, offset, root table, and shading table
     double scale = 1/options.zoom;
-    complex offset = complex(options.reOffset, -options.imOffset);
+    complex offset = complex(options.offset.re, -options.offset.im);
     std::vector<std::vector<std::vector<complex>>> valuesTable(options.samples, std::vector<std::vector<complex>>(options.imgwidth, std::vector<complex>(options.imgheight, complex(NAN))));
     std::vector<std::vector<short>> shading(options.imgwidth, std::vector<short>(options.imgheight, 0));
     unsigned int progressCounter = 0;
 
-    auto processor_count = std::thread::hardware_concurrency();
-    std::vector<std::future<void>> thread(processor_count);
-    std::vector<std::future_status> status(processor_count);
+    std::vector<std::future<void>> thread(options.processor_count);
+    std::vector<std::future_status> status(options.processor_count);
     for( int sample = 0; sample < options.samples; sample++){
-        for (int i = 0; i < processor_count; i++)
+        for (int i = 0; i < options.processor_count; i++)
         {
-            int startcol = round(float(i) * (float(options.imgwidth) / float(processor_count)));
-            int endcol = round((float(i) + 1.0) * (float(options.imgwidth) / float(processor_count)));
+            int startcol = round(float(i) * (float(options.imgwidth) / float(options.processor_count)));
+            int endcol = round((float(i) + 1.0) * (float(options.imgwidth) / float(options.processor_count)));
             auto randOffset = complex((double(rand()) / RAND_MAX) - 0.5, (double(rand()) / RAND_MAX) - 0.5) * scale;
-            thread[i] = std::async(std::launch::async, evalSection, offset + randOffset, scale, options.imgheight, options.imgwidth, startcol, endcol, func, std::ref(valuesTable[sample]), std::ref(shading), std::ref(progressCounter));
+            renderOptions sectionOptions = options;
+            sectionOptions.offset = sectionOptions.offset + randOffset;
+            thread[i] = std::async(std::launch::async, evalSection, sectionOptions, i, func, std::ref(valuesTable[sample]), std::ref(shading), std::ref(progressCounter));
         }
         while(true){
             int total = 0;
-            for(int i = 0; i < processor_count; i++)
+            for(int i = 0; i < options.processor_count; i++)
                 total += int(thread[i].wait_for(std::chrono::milliseconds(100)));
             if(total == 0)
                 break;
@@ -491,7 +482,7 @@ int main(int argc, char* argv[]) {
                 std::cout << progressBar << progressCounter << "/" << options.imgwidth * options.samples;
             }
         }
-        for (int i = 0; i < processor_count; i++)
+        for (int i = 0; i < options.processor_count; i++)
             thread[i].get();
         
     }
